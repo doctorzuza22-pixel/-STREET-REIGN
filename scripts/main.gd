@@ -94,7 +94,7 @@ func _build_car() -> void:
 	cabin.material_override = _mat(Color(0.07, 0.12, 0.17))
 	car.add_child(cabin)
 
-	for x in [-1.02, 1.02]:
+	for x: float in [-1.02, 1.02]:
 		for z in [-1.25, 1.25]:
 			var wheel := MeshInstance3D.new()
 			var wheel_mesh := CylinderMesh.new()
