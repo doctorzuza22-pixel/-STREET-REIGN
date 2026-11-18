@@ -110,6 +110,7 @@ func _build_city() -> void:
 				_add_streetlight(float(side) * 10.4, z + 3.0)
 
 	_add_jozi_landmarks()
+	_add_pretoria_landmarks()
 	_add_city_sign(-7.6, -72.0, "JOHANNESBURG  |  M1")
 	_add_city_sign(7.6, -205.0, "PRETORIA  ↑   N1")
 	_add_city_sign(-7.6, -325.0, "SANDTON  •  NEXT EXIT")
@@ -131,6 +132,16 @@ func _add_jozi_landmarks() -> void:
 	_cylinder("Ponte inner core", Vector3(48, 31, -165), 4.2, 61.0, _material(Color(0.055, 0.07, 0.10), 0.1, 0.8))
 	for y in range(5, 58, 6):
 		_cylinder("Ponte floor band", Vector3(48, y, -165), 11.08, 0.42, _material(Color(0.43, 0.47, 0.53), 0.4, 0.38))
+
+func _add_pretoria_landmarks() -> void:
+	# Pretoria skyline cues: Union Buildings terraces and the Voortrekker Monument.
+	_box("Union Buildings west wing", Vector3(57, 8.0, -260), Vector3(25, 11, 7), _material(Color(0.66, 0.55, 0.39), 0.15, 0.62))
+	_box("Union Buildings east wing", Vector3(83, 8.0, -260), Vector3(25, 11, 7), _material(Color(0.66, 0.55, 0.39), 0.15, 0.62))
+	_box("Union Buildings central block", Vector3(70, 14.0, -264), Vector3(16, 17, 8), _material(Color(0.72, 0.61, 0.44), 0.15, 0.58))
+	_cylinder("Union Buildings dome", Vector3(70, 24.0, -264), 4.2, 5.0, _material(Color(0.38, 0.43, 0.48), 0.45, 0.35))
+	_box("Union Buildings terrace", Vector3(70, 3.0, -253), Vector3(65, 1.0, 18), _material(Color(0.28, 0.34, 0.24), 0.0, 0.85))
+	_box("Voortrekker Monument", Vector3(105, 17, -310), Vector3(12, 34, 12), _material(Color(0.55, 0.46, 0.34), 0.1, 0.65))
+	_box("Monument crown", Vector3(105, 35, -310), Vector3(15, 3, 15), _material(Color(0.60, 0.50, 0.36), 0.1, 0.58))
 
 func _add_city_sign(x: float, z: float, words: String) -> void:
 	var post := _box("Road sign post", Vector3(x, 3.2, z), Vector3(0.16, 6.4, 0.16), _material(Color(0.55, 0.58, 0.62), 0.65, 0.25))
@@ -160,7 +171,7 @@ func _build_car() -> void:
 	car.name = "PlayerCar"
 	add_child(car)
 	_add_player_car_model(car)
-	car.position = Vector3(0, 0, 7)
+	car.position = Vector3(-4.5, 0, 7)
 
 	camera = Camera3D.new()
 	camera.position = Vector3(0, 4.2, 10.8)
@@ -199,7 +210,7 @@ func _add_player_car_model(parent: Node3D) -> void:
 
 func _build_police() -> void:
 	police_car = Node3D.new()
-	police_car.position = Vector3(3.5, 0, -28)
+	police_car.position = Vector3(4.5, 0, -28)
 	add_child(police_car)
 	_box_child(police_car, "Police sedan body", Vector3(0, 0.65, 0), Vector3(2.08, 0.58, 4.5), _material(Color(0.78, 0.82, 0.86), 0.48, 0.26))
 	_box_child(police_car, "Police roof", Vector3(0, 1.35, 0.1), Vector3(1.58, 0.54, 1.85), _material(Color(0.025, 0.04, 0.065), 0.35, 0.18))
@@ -251,10 +262,12 @@ func _build_hud() -> void:
 	var effects_button := _hud_button(root, "SFX ON", Vector2(-128, 18), Vector2(104, 42), true)
 	effects_button.pressed.connect(_toggle_effects.bind(effects_button))
 
-	_hud_button(root, "◀", Vector2(24, -104), Vector2(78, 76), false, true).button_down.connect(func(): touch_left = true)
-	_hud_button(root, "◀", Vector2(24, -104), Vector2(78, 76), false, true).button_up.connect(func(): touch_left = false)
-	_hud_button(root, "▶", Vector2(112, -104), Vector2(78, 76), false, true).button_down.connect(func(): touch_right = true)
-	_hud_button(root, "▶", Vector2(112, -104), Vector2(78, 76), false, true).button_up.connect(func(): touch_right = false)
+	var left_button := _hud_button(root, "◀", Vector2(24, -104), Vector2(78, 76), false, true)
+	left_button.button_down.connect(func(): touch_left = true)
+	left_button.button_up.connect(func(): touch_left = false)
+	var right_button := _hud_button(root, "▶", Vector2(112, -104), Vector2(78, 76), false, true)
+	right_button.button_down.connect(func(): touch_right = true)
+	right_button.button_up.connect(func(): touch_right = false)
 	var brake := _hud_button(root, "BRAKE", Vector2(-238, -104), Vector2(92, 76), true, true)
 	brake.button_down.connect(func(): touch_brake = true)
 	brake.button_up.connect(func(): touch_brake = false)
@@ -431,7 +444,7 @@ func _physics_process(delta: float) -> void:
 		cash += 500
 
 	police_car.position.z = move_toward(police_car.position.z, car.position.z + 15.0, delta * (13.0 + absf(speed) * 0.16))
-	police_car.position.x = move_toward(police_car.position.x, car.position.x + 2.5, delta * 2.5)
+	police_car.position.x = move_toward(police_car.position.x, car.position.x + 3.2, delta * 2.5)
 	police_car.position.z = maxf(police_car.position.z, car.position.z + 8.0)
 	var current_gear := int(absf(speed) / 14.0)
 	if current_gear > previous_gear and previous_gear >= 0:
