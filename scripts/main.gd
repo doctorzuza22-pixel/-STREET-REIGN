@@ -13,6 +13,21 @@ var touch_left := false
 var touch_right := false
 var touch_gas := false
 var touch_brake := false
+var music_player: AudioStreamPlayer
+var effects_player: AudioStreamPlayer
+var music_playback: AudioStreamGeneratorPlayback
+var effects_playback: AudioStreamGeneratorPlayback
+var music_clock := 0.0
+var engine_phase := 0.0
+var siren_phase := 0.0
+var fx_clock := 0.0
+var gear_shift_timer := 0.0
+var crash_timer := 0.0
+var crash_cooldown := 0.0
+var previous_gear := 0
+var music_enabled := true
+var effects_enabled := true
+const AUDIO_RATE := 22050.0
 
 func _ready() -> void:
 	_build_world()
@@ -20,6 +35,101 @@ func _ready() -> void:
 	_build_police()
 	_build_hud()
 	_setup_input()
+	_setup_audio()
+
+func _setup_audio() -> void:
+	music_player = AudioStreamPlayer.new()
+	var music_stream := AudioStreamGenerator.new()
+	music_stream.mix_rate = int(AUDIO_RATE)
+	music_stream.buffer_length = 0.35
+	music_player.stream = music_stream
+	add_child(music_player)
+	music_player.play()
+	music_playback = music_player.get_stream_playback() as AudioStreamGeneratorPlayback
+
+	effects_player = AudioStreamPlayer.new()
+	var effects_stream := AudioStreamGenerator.new()
+	effects_stream.mix_rate = int(AUDIO_RATE)
+	effects_stream.buffer_length = 0.35
+	effects_player.stream = effects_stream
+	add_child(effects_player)
+	effects_player.play()
+	effects_playback = effects_player.get_stream_playback() as AudioStreamGeneratorPlayback
+
+func _process(delta: float) -> void:
+	_fill_music_buffer()
+	_fill_effects_buffer()
+	if gear_shift_timer > 0.0:
+		gear_shift_timer = maxf(0.0, gear_shift_timer - delta)
+	if crash_timer > 0.0:
+		crash_timer = maxf(0.0, crash_timer - delta)
+	if crash_cooldown > 0.0:
+		crash_cooldown = maxf(0.0, crash_cooldown - delta)
+
+func _fill_music_buffer() -> void:
+	if music_playback == null:
+		return
+	var frames := music_playback.get_frames_available()
+	for i in range(frames):
+		var t := music_clock
+		var beat_phase := fposmod(t, 0.5)
+		var bar_phase := fposmod(t, 2.0)
+		var kick := 0.0
+		if beat_phase < 0.13:
+			var k := beat_phase / 0.13
+			kick = sin((48.0 - 28.0 * k) * TAU * beat_phase) * exp(-k * 5.0) * 0.34
+		var bass_note := 55.0 if bar_phase < 1.0 else 65.4
+		var bass := sin(TAU * bass_note * t) * 0.10
+		var clap := 0.0
+		if (bar_phase > 0.48 and bar_phase < 0.57) or (bar_phase > 1.48 and bar_phase < 1.57):
+			clap = (sin(TAU * 180.0 * t) + sin(TAU * 263.0 * t)) * 0.045
+		var hat_phase := fposmod(t, 0.25)
+		var hat := 0.0
+		if hat_phase < 0.018:
+			hat = sin(TAU * 6200.0 * t) * (1.0 - hat_phase / 0.018) * 0.025
+		var sample := (kick + bass + clap + hat) if music_enabled else 0.0
+		music_playback.push_frame(Vector2(sample, sample))
+		music_clock += 1.0 / AUDIO_RATE
+
+func _fill_effects_buffer() -> void:
+	if effects_playback == null:
+		return
+	var frames := effects_playback.get_frames_available()
+	var throttle := Input.is_action_pressed("accelerate") or touch_gas
+	var steering := absf(Input.get_axis("steer_left", "steer_right"))
+	if touch_left or touch_right:
+		steering = maxf(steering, 1.0)
+	var engine_hz := 48.0 + absf(speed) * 2.1 + (18.0 if throttle else 0.0)
+	var police_active := absf(speed) > 12.0
+	var tyre_active := absf(speed) > 20.0 and steering > 0.55
+	for i in range(frames):
+		var engine := (sin(engine_phase) + 0.28 * sin(engine_phase * 2.0)) * (0.035 + absf(speed) / 58.0 * 0.12)
+		engine_phase = fposmod(engine_phase + TAU * engine_hz / AUDIO_RATE, TAU)
+		var siren := 0.0
+		if police_active:
+			var siren_hz := 690.0 if sin(TAU * fx_clock * 1.4) > 0.0 else 920.0
+			siren = sin(siren_phase) * 0.10
+			siren_phase = fposmod(siren_phase + TAU * siren_hz / AUDIO_RATE, TAU)
+		var tyre := 0.0
+		if tyre_active:
+			tyre = (sin(TAU * 1750.0 * fx_clock) + sin(TAU * 2310.0 * fx_clock)) * 0.035
+		var gear := 0.0
+		if gear_shift_timer > 0.0:
+			gear = sin(TAU * 115.0 * fx_clock) * (gear_shift_timer / 0.22) * 0.20
+		var crash := 0.0
+		if crash_timer > 0.0:
+			crash = (sin(TAU * 83.0 * fx_clock) + sin(TAU * 137.0 * fx_clock)) * (crash_timer / 0.35) * 0.24
+		var sample := (engine + siren + tyre + gear + crash) if effects_enabled else 0.0
+		effects_playback.push_frame(Vector2(sample, sample))
+		fx_clock += 1.0 / AUDIO_RATE
+
+func _toggle_music(button: Button) -> void:
+	music_enabled = not music_enabled
+	button.text = "MUSIC ON" if music_enabled else "MUSIC OFF"
+
+func _toggle_effects(button: Button) -> void:
+	effects_enabled = not effects_enabled
+	button.text = "SFX ON" if effects_enabled else "SFX OFF"
 
 func _setup_input() -> void:
 	for action in ["accelerate", "brake", "steer_left", "steer_right"]:
@@ -154,6 +264,18 @@ func _build_hud() -> void:
 	_add_touch_button(layer, "▶", Vector2(125, 570), "right")
 	_add_touch_button(layer, "BRAKE", Vector2(920, 570), "brake")
 	_add_touch_button(layer, "GAS", Vector2(1080, 570), "gas")
+	var music_button := Button.new()
+	music_button.text = "MUSIC ON"
+	music_button.position = Vector2(920, 20)
+	music_button.size = Vector2(112, 42)
+	layer.add_child(music_button)
+	music_button.pressed.connect(_toggle_music.bind(music_button))
+	var effects_button := Button.new()
+	effects_button.text = "SFX ON"
+	effects_button.position = Vector2(1040, 20)
+	effects_button.size = Vector2(100, 42)
+	layer.add_child(effects_button)
+	effects_button.pressed.connect(_toggle_effects.bind(effects_button))
 
 func _add_touch_button(layer: CanvasLayer, caption: String, pos: Vector2, kind: String) -> void:
 	var button := Button.new()
@@ -185,7 +307,16 @@ func _physics_process(delta: float) -> void:
 		speed = move_toward(speed, -8.0, 34.0 * delta)
 	else:
 		speed = move_toward(speed, 0.0, 8.0 * delta)
-	car.position.x = clampf(car.position.x + steering * (4.5 + absf(speed) * 0.06) * delta, -7.0, 7.0)
+	var next_x := car.position.x + steering * (4.5 + absf(speed) * 0.06) * delta
+	if (next_x < -7.0 or next_x > 7.0) and absf(speed) > 20.0 and crash_cooldown <= 0.0:
+		crash_timer = 0.35
+		crash_cooldown = 1.2
+		speed *= 0.72
+	car.position.x = clampf(next_x, -7.0, 7.0)
+	var current_gear := int(absf(speed) / 14.0)
+	if current_gear > previous_gear and previous_gear >= 0:
+		gear_shift_timer = 0.22
+	previous_gear = current_gear
 	car.position.z -= speed * delta
 	if car.position.z < -170:
 		car.position.z = 5
