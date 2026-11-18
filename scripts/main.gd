@@ -68,7 +68,7 @@ func _build_world() -> void:
 			var w := rng.randf_range(5.0, 10.0)
 			var depth := rng.randf_range(7.0, 13.0)
 			var z := -i * 13.0 - 8.0
-			var x := side * rng.randf_range(17.0, 27.0)
+			var x: float = float(side) * rng.randf_range(17.0, 27.0)
 			var shade := rng.randf_range(0.12, 0.32)
 			_box("City building", Vector3(x, h / 2.0, z), Vector3(w, h, depth), Color(shade, shade * 1.15, shade * 1.3))
 			for floor_i in range(1, int(h / 3.5)):
